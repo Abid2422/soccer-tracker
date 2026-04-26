@@ -22,6 +22,20 @@ class Coordinator:
         }
         self.redis.set(f'consumer:{consumer_id}', json.dumps(data))
         print(f"✅ Consumer {consumer_id} registered with teams: {teams}")
+    # Add these methods to the Coordinator class:
+
+    def save_checkpoint(self, consumer_id, event_id):
+        """Save the last processed event for this consumer"""
+        self.redis.set(f'checkpoint:{consumer_id}', event_id)
+        
+    def get_checkpoint(self, consumer_id):
+        """Get the last processed event for this consumer"""
+        checkpoint = self.redis.get(f'checkpoint:{consumer_id}')
+        return checkpoint if checkpoint else None
+
+    def clear_checkpoint(self, consumer_id):
+        """Clear checkpoint (for testing)"""
+        self.redis.delete(f'checkpoint:{consumer_id}')
     
     def heartbeat(self, consumer_id):
         """Update heartbeat for this consumer"""
@@ -71,5 +85,13 @@ if __name__ == '__main__':
     print("\n❤️  TESTING HEARTBEAT:")
     coord.heartbeat(0)
     print(f"  Consumer 0 alive: {coord.is_alive(0)}")
+
+    # Test checkpointing
+    print("\n💾 TESTING CHECKPOINTING:")
+    coord.save_checkpoint(0, 'event_12345')
+    checkpoint = coord.get_checkpoint(0)
+    print(f"  Consumer 0 checkpoint: {checkpoint}")
+    coord.clear_checkpoint(0)
+    print(f"  After clear: {coord.get_checkpoint(0)}")
     
     print("\n✅ All tests passed!")

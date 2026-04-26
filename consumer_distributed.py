@@ -41,6 +41,18 @@ print(f"{'='*60}\n")
 # Register with coordinator
 coordinator.register_consumer(CONSUMER_ID, my_teams)
 
+# Check if we have a checkpoint (previous run)
+last_checkpoint = coordinator.get_checkpoint(CONSUMER_ID)
+if last_checkpoint:
+    print(f"📍 Found checkpoint: {last_checkpoint}")
+    print(f"   Will resume from last position\n")
+else:
+    print(f"📍 No checkpoint found - starting fresh\n")
+
+# Track events for checkpointing
+events_processed = 0
+CHECKPOINT_INTERVAL = 2  # Save checkpoint every 100 events
+
 # Stats
 message_count = 0
 post_count = 0
@@ -92,13 +104,13 @@ heartbeat_thread.start()
 print(f"❤️  Heartbeat thread started\n")
 
 def on_message_handler(message):
-    global message_count, post_count, my_posts
+    global message_count, post_count, my_posts, events_processed
     
     message_count += 1
     
     # Print stats every 1000 messages
     if message_count % 1000 == 0:
-        print(f"[C{CONSUMER_ID}] 📊 Messages: {message_count:,} | Total posts: {post_count:,} | My posts: {my_posts}")
+        print(f"[C{CONSUMER_ID}] 📊 Messages: {message_count:,} | Total posts: {post_count:,} | My posts: {my_posts} | Events Processed: {events_processed}")
     
     try:
         commit = parse_subscribe_repos_message(message)
@@ -143,6 +155,12 @@ def on_message_handler(message):
                     # Only process if it's about OUR teams
                     if my_team_mentions:
                         my_posts += 1
+                        events_processed += 1
+                        if events_processed % CHECKPOINT_INTERVAL == 0:
+                            # Use the commit sequence as event_id
+                            event_id = f"seq_{commit.seq}" if hasattr(commit, 'seq') else f"time_{int(time.time())}"
+                            coordinator.save_checkpoint(CONSUMER_ID, event_id)
+                            print(f"[C{CONSUMER_ID}] 💾 Checkpoint saved at {events_processed} events")
                         
                         # Show first 10 posts this consumer processes
                         if my_posts <= 10:
